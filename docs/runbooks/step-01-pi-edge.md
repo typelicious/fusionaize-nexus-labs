@@ -210,3 +210,19 @@ Override LAN CIDRs if needed:
 
     IPV4_LAN_CIDR="192.168.178.0/24" IPV6_ULA_CIDR="fdaf:a57b:d3e6:0::/64" ./firewall-apply.sh
 
+
+## 10) Maintenance (repo helper scripts)
+
+After cloning the repo on the edge host:
+
+    cd edge/pi/scripts
+    ./update.sh
+
+To also update Pi-hole subsystems:
+
+    DO_PIHOLE_UPDATE=1 ./update.sh
+
+Create backups:
+
+    ./backup.sh
+
