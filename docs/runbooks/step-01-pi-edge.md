@@ -198,3 +198,15 @@ Create a local config backup:
 Recommended additional export (easy restore):
 - Pi-hole UI -> Settings -> Teleporter -> Export
 
+
+### Using the repo helper scripts (optional)
+
+If you cloned this repo on the edge host, you can apply the firewall baseline via:
+
+    cd edge/pi/scripts
+    ./firewall-apply.sh
+
+Override LAN CIDRs if needed:
+
+    IPV4_LAN_CIDR="192.168.178.0/24" IPV6_ULA_CIDR="fdaf:a57b:d3e6:0::/64" ./firewall-apply.sh
+
