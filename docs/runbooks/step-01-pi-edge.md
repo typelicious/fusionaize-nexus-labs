@@ -1,10 +1,163 @@
-# Step 01 — Raspberry Pi (nexus-edge) Fresh Setup (Headless)
+# Step 01 — nexus-edge (Headless) Fresh Setup (Reference: Raspberry Pi OS Lite)
 
-This runbook describes a clean Raspberry Pi OS Lite (64-bit) setup:
-- SSH-only (no GUI)
-- Pi-hole (DNS + Web UI)
-- UFW firewall
-- Caddy (reverse proxy, optional)
-- CrowdSec (optional)
+This runbook sets up the **nexus-edge** role as a small, hardened edge appliance.
 
-TODO: Paste the finalized checklist here.
+Important: nexus-edge is a **role**, not a device.
+Raspberry Pi OS Lite (64-bit) is used here as a reference implementation, but the same steps apply to any minimal Debian-based host (Pi, mini PC, VM, VPS).
+
+## Goal state
+
+- SSH-only host (no GUI)
+- Pi-hole (LAN DNS + web dashboard)
+- UFW firewall (deny-by-default)
+- Optional: Caddy (reverse proxy / TLS termination)
+- Optional: CrowdSec (abuse protection)
+- Prepared for later: SSO/2FA (Authelia/Authentik) in front of public apps
+
+## Prerequisites
+
+- A reserved IP via DHCP reservation (recommended)
+- LAN access (Ethernet recommended)
+- A Pi-hole Teleporter export (teleporter_*.tar.gz) if migrating settings
+
+## 0) Network planning (recommended)
+
+Record these values:
+
+- EDGE_IP (reserved via router DHCP reservation)
+- GATEWAY_IP (router, e.g. 192.168.178.1)
+- LAN_CIDR (e.g. 192.168.178.0/24)
+- DNS strategy:
+  - Option A: Router uses Pi-hole as DNS for the whole LAN
+  - Option B: Only selected clients use Pi-hole
+
+## 1) Install OS (reference: Raspberry Pi OS Lite 64-bit)
+
+Use Raspberry Pi Imager and enable:
+
+- Hostname: nexus-edge
+- SSH: enabled (prefer SSH key auth)
+- User + password
+- Locale/timezone
+
+Boot the device and SSH in:
+
+    ssh <user>@<EDGE_IP>
+
+Update packages:
+
+    sudo apt-get update
+    sudo apt-get upgrade -y
+    sudo reboot
+
+## 2) Baseline hardening (SSH)
+
+Recommended SSH settings:
+
+- PermitRootLogin no
+- PasswordAuthentication no (only after you verified SSH keys work)
+
+Edit and restart:
+
+    sudo nano /etc/ssh/sshd_config
+    sudo systemctl restart ssh
+
+## 3) Firewall baseline (UFW)
+
+Install UFW:
+
+    sudo apt-get install -y ufw
+
+Auto-detect LAN CIDR (best-effort):
+
+    LAN_CIDR=$(ip -o -f inet addr show | awk '/scope global/ {print $4; exit}')
+    echo "LAN_CIDR=$LAN_CIDR"
+
+Apply rules:
+
+    sudo ufw --force reset
+    sudo ufw default deny incoming
+    sudo ufw default allow outgoing
+
+    # SSH (LAN only)
+    sudo ufw allow from "$LAN_CIDR" to any port 22 proto tcp
+
+    # DNS (LAN only)
+    sudo ufw allow from "$LAN_CIDR" to any port 53 proto udp
+    sudo ufw allow from "$LAN_CIDR" to any port 53 proto tcp
+
+    # Reserve for reverse proxy (optional)
+    sudo ufw allow 80/tcp
+    sudo ufw allow 443/tcp
+
+    sudo ufw --force enable
+    sudo ufw status verbose
+
+## 4) Install Pi-hole
+
+Install:
+
+    curl -sSL https://install.pi-hole.net | bash
+
+After installation:
+
+    pihole status
+
+### 4.1 Restore configuration (Teleporter)
+
+From a LAN browser:
+
+- http://<EDGE_IP>/admin
+- Settings → Teleporter → Import
+- Upload teleporter_*.tar.gz
+
+## 5) DNS activation strategies
+
+### Option A (whole LAN via router)
+
+Set the router DNS server to EDGE_IP so all clients use Pi-hole.
+
+### Option B (selected clients)
+
+Configure DNS only on selected devices.
+
+## 6) Optional: Caddy (reverse proxy / TLS termination)
+
+Install and enable:
+
+    sudo apt-get install -y caddy
+    sudo systemctl enable --now caddy
+
+Edit /etc/caddy/Caddyfile (example):
+
+    n8n.example.com {
+      reverse_proxy http://<CORE_IP>:5678
+    }
+
+Reload:
+
+    sudo caddy reload --config /etc/caddy/Caddyfile
+
+## 7) Optional: CrowdSec (abuse protection)
+
+Install:
+
+    sudo apt-get install -y crowdsec
+    sudo systemctl enable --now crowdsec
+
+Enable SSH collection:
+
+    sudo cscli collections install crowdsecurity/sshd
+    sudo systemctl restart crowdsec
+
+## 8) Validation checklist
+
+    sudo ss -tulpn
+    sudo ufw status verbose
+    pihole status
+
+Expected:
+- 22/tcp open (LAN only)
+- 53/tcp+udp open (LAN only)
+- 80/443 open if Caddy enabled
+- no unexpected services listening
