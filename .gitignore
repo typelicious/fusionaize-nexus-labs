@@ -1,0 +1,17 @@
+# secrets / env
+.env
+*.env
+secrets/
+**/secrets/
+*.key
+*.pem
+*.p12
+
+# backups
+backups/
+**/backups/
+*.tar.gz
+*.tgz
+
+# OS junk
+.DS_Store
