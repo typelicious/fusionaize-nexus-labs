@@ -161,3 +161,40 @@ Expected:
 - 53/tcp+udp open (LAN only)
 - 80/443 open if Caddy enabled
 - no unexpected services listening
+
+## 9) Hardening (recommended)
+
+### 9.1 Disable Avahi (mDNS) if you don't need *.local
+On minimal edge appliances, disabling Avahi reduces attack surface:
+
+    sudo systemctl disable --now avahi-daemon.service avahi-daemon.socket
+    sudo systemctl mask avahi-daemon.service avahi-daemon.socket
+
+### 9.2 Unattended upgrades (security-only)
+
+Enable unattended upgrades:
+
+    sudo apt-get update
+    sudo apt-get install -y unattended-upgrades
+    sudo dpkg-reconfigure -plow unattended-upgrades
+
+Harden to **security-only** by disabling the default "Debian" origin:
+
+    sudo cp /etc/apt/apt.conf.d/50unattended-upgrades /etc/apt/apt.conf.d/50unattended-upgrades.bak
+    sudo sed -i 's/^\(\s*\)"origin=Debian,codename=\${distro_codename},label=Debian";/\1\/\/ "origin=Debian,codename=${distro_codename},label=Debian";/' /etc/apt/apt.conf.d/50unattended-upgrades
+
+Verify:
+
+    grep -n 'label=Debian";' /etc/apt/apt.conf.d/50unattended-upgrades
+    grep -n 'Debian-Security' /etc/apt/apt.conf.d/50unattended-upgrades
+
+### 9.3 Backup (tarball + Teleporter)
+
+Create a local config backup:
+
+    sudo mkdir -p /var/backups/nexus-edge/pihole
+    sudo tar -czf /var/backups/nexus-edge/pihole/etc-pihole_$(date +%F).tar.gz /etc/pihole /etc/dnsmasq.d
+
+Recommended additional export (easy restore):
+- Pi-hole UI -> Settings -> Teleporter -> Export
+
